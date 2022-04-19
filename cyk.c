@@ -6,6 +6,9 @@
 #include <string.h>
 #include <pthread.h>
 
+#include <omp.h>
+#include "threadpool.h"
+
 #define MAX_PRODUCTION2_NUM 512  /* 推出非终结符的产生式的数量 */
 #define MAX_PRODUCTION1_NUM 128  /* 推出终结符的产生式的数量 */
 #define MAX_VN_NUM          128  /* 最大的非终结符数量 */
@@ -24,6 +27,12 @@ struct sector {
 	int start;
 	int num;
 };
+typedef struct worker_load worker_load_t;
+struct worker_load {
+	int left_bound;			/* 左边界 */
+	int sub_len;			/* 子串长度 */
+	int sub_count;			/* 子任务数量 */
+} worker_loads[4];
 
 int vn_number;
 int binary_production_number;
@@ -40,6 +49,12 @@ int table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
 void input(void );
 void initialize_table(void );
 void algo_main_body(void );
+
+void split_work(worker_load_t loaders[], int nsize, int sub_len);
+
+threadpool_t *pool;
+pthread_barrier_t barrier;
+int nsize = 3;
 
 int main() {
 	input();
@@ -139,53 +154,78 @@ void initialize_table(void ) {
 	}
 }
 
-void algo_main_body(void ) {
-	// 频繁地分配局部变量降低了速度
-	int i, j, k;
+void sub_str_process(int i, int j) {
+	int k;
 	int p, q;
 	int p_range, q_range;
-	int sub_len;
 	int B, C, A;
 	unsigned B_num, C_num;
 	int left, right;
 	int binary_index;
-	long long cnt[3] = {0, 0, 0};
-	for (sub_len = 2; sub_len <= s_len; ++sub_len) {
-		/**
-		 * 子字符串[i, j]
-		 * 将同一长度下的不同子字符串分配给不同线程
-		 */
-		for (i = 0; i <= s_len - sub_len; ++i) {
-			j = i + sub_len - 1;
-			for (k = i; k <= j - 1; ++k) {
-				p_range = table_list[i][k][0];
-				q_range = table_list[k + 1][j][0];
-				cnt[0]++;
-				for (p = 1; p <= p_range; ++p) {
-					for (q = 1; q <= q_range; ++q) {
-						B = table_list[i][k][p];
-						C = table_list[k + 1][j][q];
-						B_num = table_num[i][k][B];
-						C_num = table_num[k + 1][j][C];
-						left = vn_index[B][C].start;
-						right = left + vn_index[B][C].num;
-						cnt[1]++;
-						for (binary_index = left;
-							 binary_index < right;
-							 ++binary_index) {
-							A = binaries[binary_index].parent;
-							if (!table_num[i][j][A]) {
-								table_list[i][j][0]++;
-								table_list[i][j][table_list[i][j][0]] = A;
-							}
-							table_num[i][j][A] += B_num * C_num;
-							cnt[2]++;
-						}
+	for (k = i; k <= j - 1; ++k) {
+		p_range = table_list[i][k][0];
+		q_range = table_list[k + 1][j][0];
+		for (p = 1; p <= p_range; ++p) {
+			for (q = 1; q <= q_range; ++q) {
+				B = table_list[i][k][p];
+				C = table_list[k + 1][j][q];
+				B_num = table_num[i][k][B];
+				C_num = table_num[k + 1][j][C];
+				left = vn_index[B][C].start;
+				right = left + vn_index[B][C].num;
+				for (binary_index = left;
+					 binary_index < right;
+					 ++binary_index) {
+					A = binaries[binary_index].parent;
+					if (!table_num[i][j][A]) {
+						table_list[i][j][0]++;
+						table_list[i][j][table_list[i][j][0]] = A;
 					}
+					table_num[i][j][A] += B_num * C_num;
 				}
 			}
 		}
 	}
 }
 
+void work(void *aux) {
+	struct worker_load *worker_load = (struct worker_load *)aux;
+	int i, j, sub_len = worker_load->sub_len;
+	for (i = worker_load->left_bound;
+		 i < worker_load->left_bound + worker_load->sub_count;
+		 ++i) {
+		j = i + sub_len - 1;
+		sub_str_process(i, j);
+	}
+	pthread_barrier_wait(&barrier);
+}
+
+void algo_main_body(void ) {
+	int i;
+	int sub_len;
+	for (sub_len = 2; sub_len <= s_len; ++sub_len) {
+#pragma omp parallel for
+		for (i = 0; i <= s_len - sub_len; ++i) {
+			int j = i + sub_len - 1;
+			sub_str_process(i, j);
+		}
+	}
+}
+
+void split_work(worker_load_t loader[], int nsize, int sub_len) {
+	int all_count = s_len - sub_len + 1;
+	int single_count = all_count / nsize;
+	int i;
+	loader[0].left_bound = 0;
+	loader[0].sub_len = sub_len;
+	loader[0].sub_count = single_count;
+	all_count -= single_count;
+	for (i = 1; i < nsize; ++i) {
+		loader[i].left_bound = loader[i - 1].left_bound
+							   + loader[i - 1].sub_count;
+		loader[i].sub_len = sub_len;
+		loader[i].sub_count = (i != nsize - 1) ? single_count : all_count;
+		all_count -= single_count;
+	}
+}
 #pragma clang diagnostic pop
