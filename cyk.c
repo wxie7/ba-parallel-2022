@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 #include <omp.h>
+#include <sys/sysinfo.h>
 #include "threadpool.h"
 
 #define MAX_PRODUCTION2_NUM 512  /* 推出非终结符的产生式的数量 */
@@ -32,7 +33,7 @@ struct worker_load {
     int left_bound;         /* 左边界 */
     int sub_len;            /* 子串长度 */
     int sub_count;          /* 子任务数量 */
-} worker_loads[4];
+} worker_loads[0xff];
 
 int vn_number;
 int binary_production_number;
@@ -53,10 +54,14 @@ void algo_main_body(void );
 void split_work(worker_load_t loaders[], int nsize, int sub_len);
 
 threadpool_t *pool;
+int nsize = 2;
 pthread_barrier_t barrier;
-int nsize = 3;
+
+void init_threadpool(void);
 
 int main() {
+    init_threadpool();
+    pthread_barrier_init(&barrier, NULL, nsize + 1);
     input();
     initialize_table();
     algo_main_body();
@@ -64,8 +69,14 @@ int main() {
     return 0;
 }
 
+void init_threadpool(void) {
+    nsize = get_nprocs();
+    pool = threadpool_create(nsize, 1, threadpool_graceful);
+}
+
 void input(void ) {
-    freopen("input.txt", "r", stdin);
+    static char *input_filename = "input.txt";
+    freopen(input_filename, "r", stdin);
     scanf("%d\n", &vn_number);
     scanf("%d\n", &binary_production_number);
     int i;
@@ -205,11 +216,18 @@ void algo_main_body(void ) {
     int i;
     int sub_len;
     for (sub_len = 2; sub_len <= s_len; ++sub_len) {
-#pragma omp parallel for
-        for (i = 0; i <= s_len - sub_len; ++i) {
-            int j = i + sub_len - 1;
-            sub_str_process(i, j);
+        split_work(worker_loads, nsize, sub_len);
+        for (i = 0; i < nsize; ++i) {
+            threadpool_add(pool,
+                           (void (*)(void *))work,
+                           worker_loads + i);
         }
+        pthread_barrier_wait(&barrier);
+/* #pragma omp parallel for */
+/*         for (i = 0; i <= s_len - sub_len; ++i) { */
+/*             int j = i + sub_len - 1; */
+/*             sub_str_process(i, j); */
+/*         } */
     }
 }
 

@@ -1,5 +1,17 @@
 # week07
 
+## history
+
+| version | hpc   | local  | hpc | local  | note                   |
+|:-------:|:-----:|:------:|:---:|:------:|:----------------------:|
+| v0.2    | 5.775 | 16.089 |     | 42.742 | openmp优化单次斜对角线 |
+|         |       |        |     |        |                        |
+|         |       |        |     |        |                        |
+|         |       |        |     |        |                        |
+|         |       |        |     |        |                        |
+|         |       |        |     |        |                        |
+
+
 ## description
 
 输入为Chomsky范式，输入字符串为`s[0..len]`，构造大小为`len * len`的表（只需填充一半）。
@@ -8,27 +20,27 @@
 ```c
 // 表的初始化
 for (i, ch in enumerate(s)) {
-	if (存在 A-> ch) {
-		将`A->ch` 填入 table(i, i)
-	}
+    if (存在 A-> ch) {
+        将`A->ch` 填入 table(i, i)
+    }
 }
 for (sublen from 2 to len) {
-	for (left from 0 to len - sublen) {
-		right = left + sublen - 1; // [left, right] 区间
-		for (k from left to right - 1) {
-			for (B in select(table(left, k))) {
-				for (C in select(table(k + 1, right))) {
-					if (存在 A-> B C) {
-						将`A->B C` 填入table(left, right)
-					}
-				}
-			}
-		}
-	}
+    for (left from 0 to len - sublen) {
+        right = left + sublen - 1; // [left, right] 区间
+        for (k from left to right - 1) {
+            for (B in select(table(left, k))) {
+                for (C in select(table(k + 1, right))) {
+                    if (存在 A-> B C) {
+                        将`A->B C` 填入table(left, right)
+                    }
+                }
+            }
+        }
+    }
 }
 // Z为起始符号
 if (Z in table(0, len - 1)) {
-	Ok!
+    Ok!
 }
 ```
 如果要同时计算生成树的数量，记`treeNumber(T)`为构成`T`的生成树的数量。
@@ -40,37 +52,37 @@ if (Z in table(0, len - 1)) {
 // 将每个产生式包装，赋予编号和数量（数量对应上文中的生成树数量）
 // 表的初始化
 for (i, ch in enumerate(s)) {
-	// ch作索引，检索出A，但可能存在多个A
-	// 一对多的映射
-	if (exist A-> ch) {
-		Wrap(A->ch).num = 1;
-		fill Wrap(A->ch) in table(i, i)
-	}
+    // ch作索引，检索出A，但可能存在多个A
+    // 一对多的映射
+    if (exist A-> ch) {
+        Wrap(A->ch).num = 1;
+        fill Wrap(A->ch) in table(i, i)
+    }
 }
 for (sublen from 2 to len) {
-	for (left from 0 to len - sublen) {
-		right = left + sublen - 1; // [left, right] 区间
-		for (k from left to right - 1) {
-			for (B in select(table(left, k))) {
-				for (C in select(table(k + 1, right))) {
-					// 以B，C作索引，检索出A
-					if (exist A-> B C) {
-						Wrap(A->BC).num = Wrap(B).num * Wrap(C).num;
-						// 并查集
-						// 归并指标为A，即产生式左部
-						fill Wrap(A->BC) in table(left, right)
+    for (left from 0 to len - sublen) {
+        right = left + sublen - 1; // [left, right] 区间
+        for (k from left to right - 1) {
+            for (B in select(table(left, k))) {
+                for (C in select(table(k + 1, right))) {
+                    // 以B，C作索引，检索出A
+                    if (exist A-> B C) {
+                        Wrap(A->BC).num = Wrap(B).num * Wrap(C).num;
+                        // 并查集
+                        // 归并指标为A，即产生式左部
+                        fill Wrap(A->BC) in table(left, right)
                         if table(left, right) exist multiple Wrap(A) {
-							merge Wrap(A).num by add;
-						}
-					}
-				}
-			}
-		}
-	}
+                            merge Wrap(A).num by add;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 // Z为起始符号
 if (Z in table(0, len - 1)) {
-	ans = table(0, len - 1).get(Z).num;
+    ans = table(0, len - 1).get(Z).num;
 }
 ```
 ## optimization
