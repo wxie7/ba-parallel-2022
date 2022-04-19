@@ -177,10 +177,11 @@ void sub_str_process(int i, int j) {
 					 binary_index < right;
 					 ++binary_index) {
 					A = binaries[binary_index].parent;
-					if (!table_num[i][j][A]) {
-						table_list[i][j][0]++;
-						table_list[i][j][table_list[i][j][0]] = A;
-					}
+					table_num[i][j][A] ? 0 : (table_list[i][j][++table_list[i][j][0]] = A);
+					// if (!table_num[i][j][A]) {
+					// 	table_list[i][j][0]++;
+					// 	table_list[i][j][table_list[i][j][0]] = A;
+					// }
 					table_num[i][j][A] += B_num * C_num;
 				}
 			}

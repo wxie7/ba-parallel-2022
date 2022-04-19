@@ -51,7 +51,7 @@ int cmp_production2(const void *, const void *);
 
 int main() {
 	/* input data */
-	freopen("../pat.txt", "r", stdin);
+	freopen("input.txt", "r", stdin);
 	scanf("%d\n", &vn_num);
 	scanf("%d\n", &production2_num);
 	for (i = 0; i < production2_num; i++)
@@ -175,8 +175,6 @@ int main() {
 		}
 	}
 	printf("%u\n", ans);
-	long pile = clock();
-	printf("all time: %lu\n", pile / CLOCKS_PER_SEC);
 	return 0;
 }
 

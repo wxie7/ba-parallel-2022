@@ -51,7 +51,7 @@ int string_length;
 
 int main()
 {
-	freopen("../pat.txt", "r", stdin);
+	freopen("input.txt", "r", stdin);
 	scanf("%d\n", &vn_num);
 	scanf("%d\n", &production2_num);
 	for (int i = 0; i < production2_num; i++)
@@ -176,7 +176,5 @@ int main()
 		}
 	}
 	printf("%u\n", treeNum);
-	long pile = clock();
-	printf("all time: %ld\n", pile / CLOCKS_PER_SEC);
 	return 0;
 }
