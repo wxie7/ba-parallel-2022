@@ -144,6 +144,8 @@ void initialize_table(void ) {
 }
 
 unsigned BC_buf[MAX_THREADS][MAX_VN_NUM][MAX_VN_NUM];
+int BC_count[MAX_THREADS];
+int BC_list[MAX_THREADS][MAX_VN_NUM][2];
 
 void sub_str_process(int i, int j) {
     int k;
@@ -154,7 +156,9 @@ void sub_str_process(int i, int j) {
     int left, right;
     int binary_index;
     int thread_num = omp_get_thread_num();
+    int (* list)[2] = NULL;
     memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
+    BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
         p_range = table_list[i][k][0];
         q_range = table_list[k + 1][j][0];
@@ -164,23 +168,30 @@ void sub_str_process(int i, int j) {
                 C = table_list[k + 1][j][q];
                 B_num = table_num[i][k][B];
                 C_num = table_num[k + 1][j][C];
+                if (!BC_buf[thread_num][B][C]) {
+                    list = BC_list[thread_num] + BC_count[thread_num];
+                    BC_count[thread_num]++;
+                    (*list)[0] = B;
+                    (*list)[1] = C;
+                }
                 BC_buf[thread_num][B][C] += B_num * C_num;
             }
         }
     }
-    for (B = 0; B < MAX_VT_NUM; ++B) {
-        for (C = 0; C < MAX_VT_NUM; ++C) {
-            if (vn_index[B][C].num != 0 && BC_buf[thread_num][B][C] != 0) {
-                left = vn_index[B][C].start;
-                right = vn_index[B][C].num + left;
-                for (binary_index = left; binary_index < right; ++binary_index) {
-                    A = binaries[binary_index].parent;
-                    if (!table_num[i][j][A]) {
-                        table_list[i][j][0]++;
-                        table_list[i][j][table_list[i][j][0]] = A;
-                    }
-                    table_num[i][j][A] += BC_buf[thread_num][B][C];
+    // FIXME 取消冗余循环 not work
+    for (k = 0; k < BC_count[thread_num]; ++k) {
+        B = BC_list[thread_num][k][0];
+        C = BC_list[thread_num][k][1];
+        if (vn_index[B][C].num != 0 && BC_buf[thread_num][B][C] != 0) {
+            left = vn_index[B][C].start;
+            right = vn_index[B][C].num + left;
+            for (binary_index = left; binary_index < right; ++binary_index) {
+                A = binaries[binary_index].parent;
+                if (!table_num[i][j][A]) {
+                    table_list[i][j][0]++;
+                    table_list[i][j][table_list[i][j][0]] = A;
                 }
+                table_num[i][j][A] += BC_buf[thread_num][B][C];
             }
         }
     }
