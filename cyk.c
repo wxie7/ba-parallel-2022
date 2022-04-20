@@ -7,14 +7,13 @@
 #include <pthread.h>
 
 #include <omp.h>
-#include <sys/sysinfo.h>
-#include "threadpool.h"
 
 #define MAX_PRODUCTION2_NUM 512  /* 推出非终结符的产生式的数量 */
 #define MAX_PRODUCTION1_NUM 128  /* 推出终结符的产生式的数量 */
 #define MAX_VN_NUM          128  /* 最大的非终结符数量 */
 #define MAX_VT_NUM          128  /* 最大的终结符的数量 */
 #define MAX_STRING_LENGTH   1024 /* 待判断的字符串的最大长度 */
+#define MAX_THREADS         64   /* 最大线程数量 */
 
 struct binary_production {
     int parent;
@@ -28,12 +27,6 @@ struct sector {
     int start;
     int num;
 };
-typedef struct worker_load worker_load_t;
-struct worker_load {
-    int left_bound;         /* 左边界 */
-    int sub_len;            /* 子串长度 */
-    int sub_count;          /* 子任务数量 */
-} worker_loads[0xff];
 
 int vn_number;
 int binary_production_number;
@@ -51,27 +44,12 @@ void input(void );
 void initialize_table(void );
 void algo_main_body(void );
 
-void split_work(worker_load_t loaders[], int nsize, int sub_len);
-
-threadpool_t *pool;
-int nsize = 2;
-pthread_barrier_t barrier;
-
-void init_threadpool(void);
-
 int main() {
-    init_threadpool();
-    pthread_barrier_init(&barrier, NULL, nsize + 1);
     input();
     initialize_table();
     algo_main_body();
     printf("%u\n", table_num[0][s_len - 1][0]);
     return 0;
-}
-
-void init_threadpool(void) {
-    nsize = get_nprocs();
-    pool = threadpool_create(nsize, 1, threadpool_graceful);
 }
 
 void input(void ) {
@@ -165,6 +143,8 @@ void initialize_table(void ) {
     }
 }
 
+unsigned BC_buf[MAX_THREADS][MAX_VN_NUM][MAX_VN_NUM];
+
 void sub_str_process(int i, int j) {
     int k;
     int p, q;
@@ -173,6 +153,8 @@ void sub_str_process(int i, int j) {
     unsigned B_num, C_num;
     int left, right;
     int binary_index;
+    int thread_num = omp_get_thread_num();
+    memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
     for (k = i; k <= j - 1; ++k) {
         p_range = table_list[i][k][0];
         q_range = table_list[k + 1][j][0];
@@ -182,69 +164,37 @@ void sub_str_process(int i, int j) {
                 C = table_list[k + 1][j][q];
                 B_num = table_num[i][k][B];
                 C_num = table_num[k + 1][j][C];
+                BC_buf[thread_num][B][C] += B_num * C_num;
+            }
+        }
+    }
+    for (B = 0; B < MAX_VT_NUM; ++B) {
+        for (C = 0; C < MAX_VT_NUM; ++C) {
+            if (vn_index[B][C].num != 0 && BC_buf[thread_num][B][C] != 0) {
                 left = vn_index[B][C].start;
-                right = left + vn_index[B][C].num;
-                for (binary_index = left;
-                     binary_index < right;
-                     ++binary_index) {
+                right = vn_index[B][C].num + left;
+                for (binary_index = left; binary_index < right; ++binary_index) {
                     A = binaries[binary_index].parent;
-                    table_num[i][j][A] ? 0 : (table_list[i][j][++table_list[i][j][0]] = A);
-                    // if (!table_num[i][j][A]) {
-                    //  table_list[i][j][0]++;
-                    //  table_list[i][j][table_list[i][j][0]] = A;
-                    // }
-                    table_num[i][j][A] += B_num * C_num;
+                    if (!table_num[i][j][A]) {
+                        table_list[i][j][0]++;
+                        table_list[i][j][table_list[i][j][0]] = A;
+                    }
+                    table_num[i][j][A] += BC_buf[thread_num][B][C];
                 }
             }
         }
     }
 }
 
-void work(void *aux) {
-    struct worker_load *worker_load = (struct worker_load *)aux;
-    int i, j, sub_len = worker_load->sub_len;
-    for (i = worker_load->left_bound;
-         i < worker_load->left_bound + worker_load->sub_count;
-         ++i) {
-        j = i + sub_len - 1;
-        sub_str_process(i, j);
-    }
-    pthread_barrier_wait(&barrier);
-}
-
 void algo_main_body(void ) {
     int i;
     int sub_len;
     for (sub_len = 2; sub_len <= s_len; ++sub_len) {
-        split_work(worker_loads, nsize, sub_len);
-        for (i = 0; i < nsize; ++i) {
-            threadpool_add(pool,
-                           (void (*)(void *))work,
-                           worker_loads + i);
+#pragma omp parallel for
+        for (i = 0; i <= s_len - sub_len; ++i) {
+            sub_str_process(i, i + sub_len - 1);
         }
-        pthread_barrier_wait(&barrier);
-/* #pragma omp parallel for */
-/*         for (i = 0; i <= s_len - sub_len; ++i) { */
-/*             int j = i + sub_len - 1; */
-/*             sub_str_process(i, j); */
-/*         } */
     }
 }
 
-void split_work(worker_load_t loader[], int nsize, int sub_len) {
-    int all_count = s_len - sub_len + 1;
-    int single_count = all_count / nsize;
-    int i;
-    loader[0].left_bound = 0;
-    loader[0].sub_len = sub_len;
-    loader[0].sub_count = single_count;
-    all_count -= single_count;
-    for (i = 1; i < nsize; ++i) {
-        loader[i].left_bound = loader[i - 1].left_bound
-                               + loader[i - 1].sub_count;
-        loader[i].sub_len = sub_len;
-        loader[i].sub_count = (i != nsize - 1) ? single_count : all_count;
-        all_count -= single_count;
-    }
-}
 #pragma clang diagnostic pop
