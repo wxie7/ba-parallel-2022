@@ -1,3 +1,4 @@
+#include <stdint.h>
 #pragma GCC optimize("Ofast")
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "cert-err34-c"
@@ -39,7 +40,7 @@ struct unary_production unaries[MAX_PRODUCTION1_NUM];
 struct sector vn_index[MAX_VN_NUM][MAX_VN_NUM];
 struct sector vt_index[MAX_VT_NUM];
 unsigned table_num[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM];
-int table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
+uint8_t table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
 
 void input(void );
 void initialize_table(void );
@@ -145,10 +146,10 @@ void initialize_table(void ) {
 }
 
 unsigned BC_buf[MAX_THREADS][MAX_VN_NUM][MAX_VN_NUM];
-int BC_count[MAX_THREADS];
-int BC_list[MAX_THREADS][MAX_VN_NUM][2];
+uint8_t BC_count[MAX_THREADS];
+uint8_t BC_list[MAX_THREADS][MAX_VN_NUM][2];
 
-void sub_str_process(int i, int j) {
+inline void sub_str_process(int i, int j) {
     int k;
     int p, q;
     int p_range, q_range;
@@ -157,7 +158,7 @@ void sub_str_process(int i, int j) {
     int left, right;
     int binary_index;
     int thread_num = omp_get_thread_num();
-    int (* list)[2] = NULL;
+    uint8_t (* list)[2] = NULL;
     memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
     BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
