@@ -1,5 +1,5 @@
 CC       = gcc
-OPTLEVEL = -Ofast
+OPTLEVEL = 
 CFLAGS   = -fopenmp $(OPTLEVEL)
 CSTD     = gnu90
 LLIBS    = 
