@@ -140,8 +140,11 @@ void initialize_table(void ) {
 }
 
 unsigned BC_buf[MAX_THREADS][MAX_VN_NUM][MAX_VN_NUM];
+int BC_count[MAX_THREADS];
+int BC_list[MAX_THREADS][MAX_VN_NUM * MAX_VN_NUM][2];
 
-void sub_str_process(int i, int j) {
+/* optimize for sparse list */
+void sub_str_process_v1(int i, int j) {
     int k;
     int p, q;
     int p_range, q_range;
@@ -151,6 +154,7 @@ void sub_str_process(int i, int j) {
     int binary_index;
     int thread_num = omp_get_thread_num();
     memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
+    BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
         p_range = table_list[i][k][0];
         q_range = table_list[k + 1][j][0];
@@ -161,22 +165,59 @@ void sub_str_process(int i, int j) {
                 B_num = table_num[i][k][B];
                 C_num = table_num[k + 1][j][C];
 
+                if (!BC_buf[thread_num][B][C]) {
+                    BC_list[thread_num][BC_count[thread_num]][0]   = B;
+                    BC_list[thread_num][BC_count[thread_num]++][1] = C;
+                }
                 BC_buf[thread_num][B][C] += B_num * C_num;
 
-                
-                /* left = vn_index[B][C].start; */
-                /* right = left + vn_index[B][C].num; */
-                /* for (binary_index = left; */
-                /*      binary_index < right; */
-                /*      ++binary_index) { */
-                /*     A = binaries[binary_index].parent; */
-                /*     // table_num[i][j][A] ? 0 : (table_list[i][j][++table_list[i][j][0]] = A); */
-                /*     if (!table_num[i][j][A]) { */
-                /*      table_list[i][j][0]++; */
-                /*      table_list[i][j][table_list[i][j][0]] = A; */
-                /*     } */
-                /*     table_num[i][j][A] += B_num * C_num; */
-                /* } */
+            }
+        }
+    }
+    p_range = BC_count[thread_num];
+    for (k = 0; k < p_range; ++k) {
+        B = BC_list[thread_num][k][0];
+        C = BC_list[thread_num][k][1];
+        if (vn_index[B][C].end != vn_index[B][C].start
+            && BC_buf[thread_num][B][C] != 0) {
+            left = vn_index[B][C].start;
+            right = vn_index[B][C].end;
+            for (binary_index = left; binary_index < right; ++binary_index) {
+                A = binaries[binary_index].parent;
+                if (!table_num[i][j][A]) {
+                    table_list[i][j][0]++;
+                    table_list[i][j][table_list[i][j][0]] = A;
+                }
+                table_num[i][j][A] += BC_buf[thread_num][B][C];
+            }
+        }
+    }
+}
+
+
+
+void sub_str_process_v0(int i, int j) {
+    int k;
+    int p, q;
+    int p_range, q_range;
+    int B, C, A;
+    unsigned B_num, C_num;
+    int left, right;
+    int binary_index;
+    int thread_num = omp_get_thread_num();
+    memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
+    BC_count[thread_num] = 0;
+    for (k = i; k <= j - 1; ++k) {
+        p_range = table_list[i][k][0];
+        q_range = table_list[k + 1][j][0];
+        for (p = 1; p <= p_range; ++p) {
+            for (q = 1; q <= q_range; ++q) {
+                B = table_list[i][k][p];
+                C = table_list[k + 1][j][q];
+                B_num = table_num[i][k][B];
+                C_num = table_num[k + 1][j][C];
+                BC_buf[thread_num][B][C] += B_num * C_num;
+
             }
         }
     }
@@ -202,10 +243,12 @@ void sub_str_process(int i, int j) {
 void algo_main_body(void ) {
     int i;
     int sub_len;
+    void (*f)(int, int);
     for (sub_len = 2; sub_len <= s_len; ++sub_len) {
+        f = (sub_len < s_len / 2) ? sub_str_process_v1 : sub_str_process_v0;
 #pragma omp parallel for
         for (i = 0; i <= s_len - sub_len; ++i) {
-            sub_str_process(i, i + sub_len - 1);
+            f(i, i + sub_len - 1);
         }
     }
 }
