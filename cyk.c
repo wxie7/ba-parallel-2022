@@ -27,7 +27,7 @@ struct unary_production {
 };
 struct sector {
     int start;
-    int num;
+    int end;
 };
 
 int vn_number;
@@ -104,36 +104,30 @@ void initialize_table(void ) {
     unsigned char ch;
     int start, end;
     int parent;
-    for (i = 0; i < MAX_VT_NUM; ++i) {
-        vt_index[i].start = -1;
-        vt_index[i].num = 0;
-    }
+    memset(vt_index, 0xff, sizeof(vt_index[0]) * MAX_VT_NUM);
     for (i = 0; i < unary_production_number; ++i) {
         ch = unaries[i].ch;
         if (vt_index[ch].start == -1) {
-            vt_index[ch].start = i;
+            vt_index[ch].start = vt_index[ch].end = i;
         }
-        vt_index[ch].num += 1;
+        vt_index[ch].end += 1;
     }
     for (i = 0; i < vn_number; ++i) {
-        for (j = 0; j < vn_number; ++j) {
-            vn_index[i][j].start = -1;
-            vn_index[i][j].num = 0;
-        }
+        memset(vn_index[i], 0xff, sizeof(vn_index[0][0]) * vn_number);
     }
     for (i = 0; i < binary_production_number; ++i) {
         left = binaries[i].left;
         right = binaries[i].right;
         if (vn_index[left][right].start == -1) {
-            vn_index[left][right].start = i;
+            vn_index[left][right].start = vn_index[left][right].end = i;
         }
-        vn_index[left][right].num += 1;
+        vn_index[left][right].end += 1;
     }
     /* 填表的第一个斜对角线 */
     for (i = 0; i < s_len; ++i) {
         ch = s[i];
         start = vt_index[ch].start;
-        end = vt_index[ch].start + vt_index[ch].num;
+        end = vt_index[ch].end;
         for (j = start; j < end; ++j) {
             parent = unaries[j].parent;
             if (!table_num[i][i][parent]) {
@@ -188,9 +182,10 @@ void sub_str_process(int i, int j) {
     }
     for (B = 0; B < MAX_VT_NUM; ++B) {
         for (C = 0; C < MAX_VT_NUM; ++C) {
-            if (vn_index[B][C].num != 0 && BC_buf[thread_num][B][C] != 0) {
+            if (vn_index[B][C].end != vn_index[B][C].start
+                && BC_buf[thread_num][B][C] != 0) {
                 left = vn_index[B][C].start;
-                right = vn_index[B][C].num + left;
+                right = vn_index[B][C].end;
                 for (binary_index = left; binary_index < right; ++binary_index) {
                     A = binaries[binary_index].parent;
                     if (!table_num[i][j][A]) {
