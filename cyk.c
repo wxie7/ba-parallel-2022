@@ -1,4 +1,3 @@
-#include <stdint.h>
 #pragma GCC optimize("Ofast")
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "cert-err34-c"
@@ -9,6 +8,7 @@
 #include <pthread.h>
 
 #include <omp.h>
+#include <sys/sysinfo.h>
 
 #define MAX_PRODUCTION2_NUM 512  /* 推出非终结符的产生式的数量 */
 #define MAX_PRODUCTION1_NUM 128  /* 推出终结符的产生式的数量 */
@@ -40,7 +40,7 @@ struct unary_production unaries[MAX_PRODUCTION1_NUM];
 struct sector vn_index[MAX_VN_NUM][MAX_VN_NUM];
 struct sector vt_index[MAX_VT_NUM];
 unsigned table_num[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM];
-uint8_t table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
+int table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
 
 void input(void );
 void initialize_table(void );
@@ -146,10 +146,8 @@ void initialize_table(void ) {
 }
 
 unsigned BC_buf[MAX_THREADS][MAX_VN_NUM][MAX_VN_NUM];
-uint8_t BC_count[MAX_THREADS];
-uint8_t BC_list[MAX_THREADS][MAX_VN_NUM][2];
 
-inline void sub_str_process(int i, int j) {
+void sub_str_process(int i, int j) {
     int k;
     int p, q;
     int p_range, q_range;
@@ -158,9 +156,7 @@ inline void sub_str_process(int i, int j) {
     int left, right;
     int binary_index;
     int thread_num = omp_get_thread_num();
-    uint8_t (* list)[2] = NULL;
     memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
-    BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
         p_range = table_list[i][k][0];
         q_range = table_list[k + 1][j][0];
@@ -170,30 +166,39 @@ inline void sub_str_process(int i, int j) {
                 C = table_list[k + 1][j][q];
                 B_num = table_num[i][k][B];
                 C_num = table_num[k + 1][j][C];
-                if (!BC_buf[thread_num][B][C]) {
-                    list = BC_list[thread_num] + BC_count[thread_num];
-                    BC_count[thread_num]++;
-                    (*list)[0] = B;
-                    (*list)[1] = C;
-                }
+
                 BC_buf[thread_num][B][C] += B_num * C_num;
+
+                
+                /* left = vn_index[B][C].start; */
+                /* right = left + vn_index[B][C].num; */
+                /* for (binary_index = left; */
+                /*      binary_index < right; */
+                /*      ++binary_index) { */
+                /*     A = binaries[binary_index].parent; */
+                /*     // table_num[i][j][A] ? 0 : (table_list[i][j][++table_list[i][j][0]] = A); */
+                /*     if (!table_num[i][j][A]) { */
+                /*      table_list[i][j][0]++; */
+                /*      table_list[i][j][table_list[i][j][0]] = A; */
+                /*     } */
+                /*     table_num[i][j][A] += B_num * C_num; */
+                /* } */
             }
         }
     }
-    // TODO 取消冗余循环
-    for (k = 0; k < BC_count[thread_num]; ++k) {
-        B = BC_list[thread_num][k][0];
-        C = BC_list[thread_num][k][1];
-        if (vn_index[B][C].num != 0 && BC_buf[thread_num][B][C] != 0) {
-            left = vn_index[B][C].start;
-            right = vn_index[B][C].num + left;
-            for (binary_index = left; binary_index < right; ++binary_index) {
-                A = binaries[binary_index].parent;
-                if (!table_num[i][j][A]) {
-                    table_list[i][j][0]++;
-                    table_list[i][j][table_list[i][j][0]] = A;
+    for (B = 0; B < MAX_VT_NUM; ++B) {
+        for (C = 0; C < MAX_VT_NUM; ++C) {
+            if (vn_index[B][C].num != 0 && BC_buf[thread_num][B][C] != 0) {
+                left = vn_index[B][C].start;
+                right = vn_index[B][C].num + left;
+                for (binary_index = left; binary_index < right; ++binary_index) {
+                    A = binaries[binary_index].parent;
+                    if (!table_num[i][j][A]) {
+                        table_list[i][j][0]++;
+                        table_list[i][j][table_list[i][j][0]] = A;
+                    }
+                    table_num[i][j][A] += BC_buf[thread_num][B][C];
                 }
-                table_num[i][j][A] += BC_buf[thread_num][B][C];
             }
         }
     }
