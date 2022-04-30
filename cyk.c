@@ -35,6 +35,9 @@ int binary_production_number;
 int unary_production_number;
 int s_len;
 char s[MAX_STRING_LENGTH];
+int binaries_parent[MAX_PRODUCTION2_NUM];
+/* int binaries_left[MAX_PRODUCTION2_NUM]; */
+/* int binaries_right[MAX_PRODUCTION2_NUM]; */
 struct binary_production binaries[MAX_PRODUCTION2_NUM];
 struct unary_production unaries[MAX_PRODUCTION1_NUM];
 struct sector vn_index[MAX_VN_NUM][MAX_VN_NUM];
@@ -92,6 +95,11 @@ int cmp_unary(const void *_a, const void *_b) {
                           (a->ch < b->ch ? -1 : 1);
 }
 void initialize_table(void ) {
+    int i, j;
+    int left, right;
+    unsigned char ch;
+    int start, end;
+    int parent;
     /* 初始化索引表 */
     qsort(unaries, unary_production_number,
           sizeof(struct unary_production),
@@ -99,11 +107,11 @@ void initialize_table(void ) {
     qsort(binaries, binary_production_number,
           sizeof(struct binary_production),
           cmp_binary);
-    int i, j;
-    int left, right;
-    unsigned char ch;
-    int start, end;
-    int parent;
+
+    for (i = 0; i < binary_production_number; ++i) {
+        binaries_parent[i] = binaries[i].parent;
+    }
+    
     memset(vt_index, 0xff, sizeof(vt_index[0]) * MAX_VT_NUM);
     for (i = 0; i < unary_production_number; ++i) {
         ch = unaries[i].ch;
@@ -183,7 +191,7 @@ void sub_str_process_v1(int i, int j) {
             left = vn_index[B][C].start;
             right = vn_index[B][C].end;
             for (binary_index = left; binary_index < right; ++binary_index) {
-                A = binaries[binary_index].parent;
+                A = binaries_parent[binary_index];
                 if (!table_num[i][j][A]) {
                     table_list[i][j][0]++;
                     table_list[i][j][table_list[i][j][0]] = A;
@@ -228,7 +236,7 @@ void sub_str_process_v0(int i, int j) {
                 left = vn_index[B][C].start;
                 right = vn_index[B][C].end;
                 for (binary_index = left; binary_index < right; ++binary_index) {
-                    A = binaries[binary_index].parent;
+                    A = binaries_parent[binary_index];
                     if (!table_num[i][j][A]) {
                         table_list[i][j][0]++;
                         table_list[i][j][table_list[i][j][0]] = A;
