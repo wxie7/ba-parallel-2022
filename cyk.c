@@ -244,8 +244,9 @@ void algo_main_body(void ) {
     int i;
     int sub_len;
     void (*f)(int, int);
+    int bound = s_len * 1 / 3;
     for (sub_len = 2; sub_len <= s_len; ++sub_len) {
-        f = (sub_len < s_len / 2) ? sub_str_process_v1 : sub_str_process_v0;
+        f = (sub_len < bound) ? sub_str_process_v1 : sub_str_process_v0;
 #pragma omp parallel for
         for (i = 0; i <= s_len - sub_len; ++i) {
             f(i, i + sub_len - 1);
