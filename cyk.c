@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <semaphore.h>
 
-#include <omp.h>
 #include <sys/sysinfo.h>
 
 #define MAX_PRODUCTION2_NUM 512  /* 推出非终结符的产生式的数量 */
@@ -45,14 +45,26 @@ struct sector vt_index[MAX_VT_NUM];
 unsigned table_num[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM];
 int table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
 
+pthread_t threads[MAX_STRING_LENGTH];
+sem_t sems[MAX_STRING_LENGTH];
+pthread_mutex_t mutex;
+int used_buf;
+
+
 void input(void );
 void initialize_table(void );
-void algo_main_body(void );
+void init_sem(void );
+void *algo_main_body(void *aux);
+
+void *routine(void *aux);
+void *base_routine(void *aux);
 
 int main() {
     input();
     initialize_table();
-    algo_main_body();
+    init_sem();
+    algo_main_body(NULL);
+    pthread_join(threads[s_len - 1], NULL);
     printf("%u\n", table_num[0][s_len - 1][0]);
     return 0;
 }
@@ -111,7 +123,7 @@ void initialize_table(void ) {
     for (i = 0; i < binary_production_number; ++i) {
         binaries_parent[i] = binaries[i].parent;
     }
-    
+
     memset(vt_index, 0xff, sizeof(vt_index[0]) * MAX_VT_NUM);
     for (i = 0; i < unary_production_number; ++i) {
         ch = unaries[i].ch;
@@ -131,7 +143,6 @@ void initialize_table(void ) {
         }
         vn_index[left][right].end += 1;
     }
-    /* 填表的第一个斜对角线 */
     for (i = 0; i < s_len; ++i) {
         ch = s[i];
         start = vt_index[ch].start;
@@ -147,12 +158,19 @@ void initialize_table(void ) {
     }
 }
 
-unsigned BC_buf[MAX_THREADS][MAX_VN_NUM][MAX_VN_NUM];
-int BC_count[MAX_THREADS];
-int BC_list[MAX_THREADS][MAX_VN_NUM * MAX_VN_NUM][2];
+void init_sem(void ) {
+    int i;
+    for (i = 1; i < s_len; ++i) {
+        sem_init(&sems[i], 0, 0);
+    }
+}
+
+unsigned BC_buf[MAX_STRING_LENGTH][MAX_VN_NUM][MAX_VN_NUM];
+int BC_count[MAX_STRING_LENGTH];
+int BC_list[MAX_STRING_LENGTH][MAX_VN_NUM * MAX_VN_NUM][2];
 
 /* optimize for sparse list */
-void sub_str_process_v1(int i, int j) {
+void sub_str_process_v1(int i, int j, void *aux) {
     int k;
     int p, q;
     int p_range, q_range;
@@ -160,7 +178,7 @@ void sub_str_process_v1(int i, int j) {
     unsigned B_num, C_num;
     int left, right;
     int binary_index;
-    int thread_num = omp_get_thread_num();
+    int thread_num = (int)aux;
     memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
     BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
@@ -204,7 +222,7 @@ void sub_str_process_v1(int i, int j) {
 
 
 
-void sub_str_process_v0(int i, int j) {
+void sub_str_process_v0(int i, int j, void *aux) {
     int k;
     int p, q;
     int p_range, q_range;
@@ -212,7 +230,7 @@ void sub_str_process_v0(int i, int j) {
     unsigned B_num, C_num;
     int left, right;
     int binary_index;
-    int thread_num = omp_get_thread_num();
+    int thread_num = (int)aux;
     memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
     BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
@@ -248,18 +266,35 @@ void sub_str_process_v0(int i, int j) {
     }
 }
 
-void algo_main_body(void ) {
+
+void *algo_main_body(void *aux) {
     int i;
     int sub_len;
-    void (*f)(int, int);
-    int bound = s_len * 1 / 3;
-    for (sub_len = 2; sub_len <= s_len; ++sub_len) {
-        f = (sub_len < bound) ? sub_str_process_v1 : sub_str_process_v0;
-#pragma omp parallel for
-        for (i = 0; i <= s_len - sub_len; ++i) {
-            f(i, i + sub_len - 1);
-        }
+    for (i = 1; i < s_len; ++i) {
+        sem_post(&sems[1]);
     }
+    for (i = 1; i < s_len; ++i) {
+        pthread_create(&threads[i],
+                       NULL,
+                       routine,
+                       (void *)i);
+    }
+    return NULL;
+}
+
+void *routine(void *aux) {
+    int thread_num = (int)aux;
+    int i;
+    void (*f) (int, int, void *);
+    f = (thread_num < s_len / 3) ? sub_str_process_v1 : sub_str_process_v0;
+
+    for (i = 0; i < s_len - thread_num; ++i) {
+        sem_wait(&sems[thread_num]);
+        f(i, i + thread_num, aux);
+        if (i != 0 && thread_num != s_len - 1)
+            sem_post(&sems[thread_num + 1]);
+    }
+    return NULL;
 }
 
 #pragma clang diagnostic pop

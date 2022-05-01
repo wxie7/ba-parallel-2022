@@ -1,8 +1,7 @@
 CC       = gcc
-OPTLEVEL = 
-CFLAGS   = -fopenmp $(OPTLEVEL)
+CFLAGS   = 
 CSTD     = gnu90
-LLIBS    = 
+LLIBS    = -lpthread
 BUILDDIR = build
 TARGET   = cyk
 SOURCES  = cyk.c
@@ -14,7 +13,7 @@ dir:
 	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/$(TARGET): $(OBJECTS)
-	$(CC) $^ $(LIBS) $(CFLAGS) -o $@
+	$(CC) $^ $(LLIBS) $(CFLAGS) -o $@
 
 $(OBJECTS): $(BUILDDIR)/%.o : %.c
-	$(CC) -std=$(CSTD) -c $(CFLAGS) $< -o $@ $(OPTLEVEL)
+	$(CC) -std=$(CSTD) -c $(CFLAGS) $< -o $@ $(LLIBS)
