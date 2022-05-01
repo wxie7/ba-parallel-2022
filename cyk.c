@@ -286,7 +286,7 @@ void *routine(void *aux) {
     int thread_num = (int)aux;
     int i;
     void (*f) (int, int, void *);
-    f = (thread_num < s_len / 3) ? sub_str_process_v1 : sub_str_process_v0;
+    f = (thread_num < s_len / 4) ? sub_str_process_v1 : sub_str_process_v0;
 
     for (i = 0; i < s_len - thread_num; ++i) {
         sem_wait(&sems[thread_num]);
