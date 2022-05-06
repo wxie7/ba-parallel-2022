@@ -176,34 +176,16 @@ void sub_str_process_v1(int i, int j, void *aux) {
     int p_range, q_range;
     int B, C, A;
     unsigned B_num, C_num;
-    unsigned BC;
+    unsigned BC_num;
     int left, right;
     int binary_index;
     int thread_num = (int)aux;
     for (k = i; k <= j - 1; ++k) {
-        p_range = table_list[i][k][0];
-        q_range = table_list[k + 1][j][0];
-        for (p = 1; p <= p_range; ++p) {
-            for (q = 1; q <= q_range; ++q) {
-                B = table_list[i][k][p];
-                C = table_list[k + 1][j][q];
-
-                if (vn_index[B][C].end != vn_index[B][C].start) {
-                    BC = table_num[i][k][B] * table_num[k + 1][j][C];
-                    left = vn_index[B][C].start;
-                    right = vn_index[B][C].end;
-                    for (binary_index = left; 
-                            binary_index < right;
-                            ++binary_index) {
-                        A = binaries_parent[binary_index];
-                        if (!table_num[i][j][A]) {
-                            table_list[i][j][0]++;
-                            table_list[i][j][table_list[i][j][0]] = A;
-                        }
-                        table_num[i][j][A] += BC;
-                    }
-                }
-            }
+        for (p = 0; p < binary_production_number; ++p) {
+            B = binaries[p].left;
+            C = binaries[p].right;
+            A = binaries[p].parent;
+            table_num[i][j][A] += table_num[i][k][B] * table_num[k + 1][j][C];
         }
     }
 }
@@ -216,11 +198,10 @@ void sub_str_process_v0(int i, int j, void *aux) {
     int p_range, q_range;
     int B, C, A;
     unsigned B_num, C_num;
+    unsigned BC_num;
     int left, right;
     int binary_index;
     int thread_num = (int)aux;
-    memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
-    BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
         p_range = table_list[i][k][0];
         q_range = table_list[k + 1][j][0];
@@ -228,26 +209,21 @@ void sub_str_process_v0(int i, int j, void *aux) {
             for (q = 1; q <= q_range; ++q) {
                 B = table_list[i][k][p];
                 C = table_list[k + 1][j][q];
-                B_num = table_num[i][k][B];
-                C_num = table_num[k + 1][j][C];
-                BC_buf[thread_num][B][C] += B_num * C_num;
 
-            }
-        }
-    }
-    for (B = 0; B < MAX_VT_NUM; ++B) {
-        for (C = 0; C < MAX_VT_NUM; ++C) {
-            if (vn_index[B][C].end != vn_index[B][C].start
-                && BC_buf[thread_num][B][C] != 0) {
-                left = vn_index[B][C].start;
-                right = vn_index[B][C].end;
-                for (binary_index = left; binary_index < right; ++binary_index) {
-                    A = binaries_parent[binary_index];
-                    if (!table_num[i][j][A]) {
-                        table_list[i][j][0]++;
-                        table_list[i][j][table_list[i][j][0]] = A;
+                if (vn_index[B][C].end != vn_index[B][C].start) {
+                    BC_num = table_num[i][k][B] * table_num[k + 1][j][C];
+                    left = vn_index[B][C].start;
+                    right = vn_index[B][C].end;
+                    for (binary_index = left; 
+                            binary_index < right;
+                            ++binary_index) {
+                        A = binaries_parent[binary_index];
+                        if (!table_num[i][j][A]) {
+                            table_list[i][j][0]++;
+                            table_list[i][j][table_list[i][j][0]] = A;
+                        }
+                        table_num[i][j][A] += BC_num;
                     }
-                    table_num[i][j][A] += BC_buf[thread_num][B][C];
                 }
             }
         }
@@ -274,9 +250,8 @@ void *routine(void *aux) {
     int thread_num = (int)aux;
     int i;
     void (*f) (int, int, void *);
-    // f = (thread_num < s_len / 4) ? sub_str_process_v1 : sub_str_process_v0;
-
-    f = sub_str_process_v1;
+    f = (s_len > MAX_STRING_LENGTH * 4 / 5) ? 
+        sub_str_process_v0 : sub_str_process_v1;
 
     for (i = 0; i < s_len - thread_num; ++i) {
         sem_wait(&sems[thread_num]);
