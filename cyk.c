@@ -18,8 +18,8 @@
 #define MAX_THREADS         64   /* 最大线程数量 */
 
 struct binary_production {
-    int parent;
-    int left, right;
+    short parent;
+    short left, right;
 };
 struct unary_production {
     int parent;
@@ -36,19 +36,15 @@ int unary_production_number;
 int s_len;
 char s[MAX_STRING_LENGTH];
 int binaries_parent[MAX_PRODUCTION2_NUM];
-/* int binaries_left[MAX_PRODUCTION2_NUM]; */
-/* int binaries_right[MAX_PRODUCTION2_NUM]; */
 struct binary_production binaries[MAX_PRODUCTION2_NUM];
 struct unary_production unaries[MAX_PRODUCTION1_NUM];
 struct sector vn_index[MAX_VN_NUM][MAX_VN_NUM];
 struct sector vt_index[MAX_VT_NUM];
 unsigned table_num[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM];
-int table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
+short table_list[MAX_STRING_LENGTH][MAX_STRING_LENGTH][MAX_VN_NUM + 1];
 
 pthread_t threads[MAX_STRING_LENGTH];
 sem_t sems[MAX_STRING_LENGTH];
-pthread_mutex_t mutex;
-int used_buf;
 
 
 void input(void );
@@ -57,7 +53,6 @@ void init_sem(void );
 void *algo_main_body(void *aux);
 
 void *routine(void *aux);
-void *base_routine(void *aux);
 
 int main() {
     input();
@@ -76,7 +71,7 @@ void input(void ) {
     scanf("%d\n", &binary_production_number);
     int i;
     for (i = 0; i < binary_production_number; i++)
-        scanf("<%d>::=<%d><%d>\n",
+        scanf("<%hd>::=<%hd><%hd>\n",
               &binaries[i].parent,
               &binaries[i].left,
               &binaries[i].right);
@@ -172,14 +167,8 @@ int BC_list[MAX_STRING_LENGTH][MAX_VN_NUM * MAX_VN_NUM][2];
 /* optimize for sparse list */
 void sub_str_process_v1(int i, int j, void *aux) {
     int k;
-    int p, q;
-    int p_range, q_range;
+    int p;
     int B, C, A;
-    unsigned B_num, C_num;
-    unsigned BC_num;
-    int left, right;
-    int binary_index;
-    int thread_num = (int)aux;
     for (k = i; k <= j - 1; ++k) {
         for (p = 0; p < binary_production_number; ++p) {
             B = binaries[p].left;
