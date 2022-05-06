@@ -1,5 +1,5 @@
 CC       = gcc
-CFLAGS   = 
+CFLAGS   = -fopenmp
 CSTD     = gnu90
 LLIBS    = -lpthread
 BUILDDIR = build
