@@ -164,7 +164,7 @@ unsigned BC_buf[MAX_STRING_LENGTH][MAX_VN_NUM][MAX_VN_NUM];
 int BC_count[MAX_STRING_LENGTH];
 int BC_list[MAX_STRING_LENGTH][MAX_VN_NUM * MAX_VN_NUM][2];
 
-/* optimize for sparse list */
+/* optimize for short string */
 void sub_str_process_v1(int i, int j, void *aux) {
     int k;
     int p;
