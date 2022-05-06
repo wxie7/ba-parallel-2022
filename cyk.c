@@ -176,11 +176,10 @@ void sub_str_process_v1(int i, int j, void *aux) {
     int p_range, q_range;
     int B, C, A;
     unsigned B_num, C_num;
+    unsigned BC;
     int left, right;
     int binary_index;
     int thread_num = (int)aux;
-    memset(BC_buf + thread_num, 0, sizeof(BC_buf[0]));
-    BC_count[thread_num] = 0;
     for (k = i; k <= j - 1; ++k) {
         p_range = table_list[i][k][0];
         q_range = table_list[k + 1][j][0];
@@ -188,33 +187,22 @@ void sub_str_process_v1(int i, int j, void *aux) {
             for (q = 1; q <= q_range; ++q) {
                 B = table_list[i][k][p];
                 C = table_list[k + 1][j][q];
-                B_num = table_num[i][k][B];
-                C_num = table_num[k + 1][j][C];
 
-                if (!BC_buf[thread_num][B][C]) {
-                    BC_list[thread_num][BC_count[thread_num]][0]   = B;
-                    BC_list[thread_num][BC_count[thread_num]++][1] = C;
+                if (vn_index[B][C].end != vn_index[B][C].start) {
+                    BC = table_num[i][k][B] * table_num[k + 1][j][C];
+                    left = vn_index[B][C].start;
+                    right = vn_index[B][C].end;
+                    for (binary_index = left; 
+                            binary_index < right;
+                            ++binary_index) {
+                        A = binaries_parent[binary_index];
+                        if (!table_num[i][j][A]) {
+                            table_list[i][j][0]++;
+                            table_list[i][j][table_list[i][j][0]] = A;
+                        }
+                        table_num[i][j][A] += BC;
+                    }
                 }
-                BC_buf[thread_num][B][C] += B_num * C_num;
-
-            }
-        }
-    }
-    p_range = BC_count[thread_num];
-    for (k = 0; k < p_range; ++k) {
-        B = BC_list[thread_num][k][0];
-        C = BC_list[thread_num][k][1];
-        if (vn_index[B][C].end != vn_index[B][C].start
-            && BC_buf[thread_num][B][C] != 0) {
-            left = vn_index[B][C].start;
-            right = vn_index[B][C].end;
-            for (binary_index = left; binary_index < right; ++binary_index) {
-                A = binaries_parent[binary_index];
-                if (!table_num[i][j][A]) {
-                    table_list[i][j][0]++;
-                    table_list[i][j][table_list[i][j][0]] = A;
-                }
-                table_num[i][j][A] += BC_buf[thread_num][B][C];
             }
         }
     }
@@ -286,7 +274,9 @@ void *routine(void *aux) {
     int thread_num = (int)aux;
     int i;
     void (*f) (int, int, void *);
-    f = (thread_num < s_len / 4) ? sub_str_process_v1 : sub_str_process_v0;
+    // f = (thread_num < s_len / 4) ? sub_str_process_v1 : sub_str_process_v0;
+
+    f = sub_str_process_v1;
 
     for (i = 0; i < s_len - thread_num; ++i) {
         sem_wait(&sems[thread_num]);
