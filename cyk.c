@@ -9,6 +9,7 @@
 #include <semaphore.h>
 
 #include <sys/sysinfo.h>
+#include <sys/time.h>
 
 #define MAX_PRODUCTION2_NUM 512  /* 推出非终结符的产生式的数量 */
 #define MAX_PRODUCTION1_NUM 128  /* 推出终结符的产生式的数量 */
@@ -55,12 +56,25 @@ void *algo_main_body(void *aux);
 void *routine(void *aux);
 
 int main() {
+    struct timeval base_tv;
+    struct timeval eval_tv;
+    struct timeval res_tv;
+    gettimeofday(&base_tv, NULL);
+    
     input();
     initialize_table();
     init_sem();
     algo_main_body(NULL);
     pthread_join(threads[s_len - 1], NULL);
     printf("%u\n", table_num[0][s_len - 1][0]);
+
+    gettimeofday(&eval_tv, NULL);
+    timersub(&eval_tv, &base_tv, &res_tv);
+
+    double wall_time = (res_tv.tv_sec * 1000000 + res_tv.tv_usec) * 0.000001;
+
+    printf("wall time: %.7f\n", wall_time);
+
     return 0;
 }
 
